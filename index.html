@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>SpeedBeam — Internet Speed Test</title>
+<meta name="description" content="A cinematic, holographic internet speed test." />
+<meta name="theme-color" content="#05070f" />
+<link rel="icon" type="image/png" href="assets/favicon-32.png" />
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="css/variables.css" />
+<link rel="stylesheet" href="css/base.css" />
+<link rel="stylesheet" href="css/layout.css" />
+<link rel="stylesheet" href="css/components.css" />
+<link rel="stylesheet" href="css/animations.css" />
+<link rel="stylesheet" href="css/responsive.css" />
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+    "gsap": "https://cdn.jsdelivr.net/npm/gsap@3.12.5/index.js"
+  }
+}
+</script>
+</head>
+<body>
+
+<!-- Skip link for keyboard / screen-reader users -->
+<a class="skip-link" href="#main">Skip to content</a>
+
+<!-- 3D background canvas — stars, nebula, grid floor, floating nodes -->
+<canvas id="bg-canvas" aria-hidden="true"></canvas>
+
+<!-- Foreground vignette / aurora overlay (pure CSS, sits above canvas, below UI) -->
+<div class="aurora-overlay" aria-hidden="true"></div>
+<div class="vignette" aria-hidden="true"></div>
+
+<div id="app" class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-name">SpeedBeam</span>
+    </div>
+    <nav class="topbar-actions">
+      <button id="sound-toggle" class="icon-btn" type="button" aria-pressed="true" aria-label="Toggle sound">
+        <svg id="icon-sound-on" viewBox="0 0 24 24" width="18" height="18"><path d="M4 9v6h4l5 5V4L8 9H4z" fill="currentColor"/><path d="M16.5 12a4.5 4.5 0 0 0-2.5-4.03v8.06A4.5 4.5 0 0 0 16.5 12z" fill="currentColor"/></svg>
+        <svg id="icon-sound-off" viewBox="0 0 24 24" width="18" height="18" hidden><path d="M4 9v6h4l5 5V4L8 9H4z" fill="currentColor"/><path d="M19 8l-4 4m0-4l4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg>
+      </button>
+      <button id="history-toggle" class="icon-btn" type="button" aria-label="Open test history" aria-expanded="false" aria-controls="history-panel">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 6v6l4 2" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>
+      </button>
+    </nav>
+  </header>
+
+  <main id="main" class="stage">
+
+    <!-- HERO / IDLE STATE -->
+    <section class="hero" id="hero-section" aria-live="polite">
+      <p class="eyebrow" id="status-line">Idle — link stable</p>
+      <h1 class="hero-title">Measure your connection<br/><span class="grad-text">at the speed of light.</span></h1>
+
+      <div class="orb-stage" id="orb-stage">
+        <!-- sphere rendered into bg-canvas via three.js; this div reserves layout space + houses HUD rings -->
+        <div class="hud-rings" aria-hidden="true">
+          <svg id="speedometer" viewBox="0 0 360 360" class="speedometer">
+            <defs>
+              <linearGradient id="gradDown" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#00d4ff"/>
+                <stop offset="100%" stop-color="#7b61ff"/>
+              </linearGradient>
+              <filter id="glowFilter" x="-60%" y="-60%" width="220%" height="220%">
+                <feGaussianBlur stdDeviation="4.5" result="blur"/>
+                <feMerge>
+                  <feMergeNode in="blur"/>
+                  <feMergeNode in="SourceGraphic"/>
+                </feMerge>
+              </filter>
+            </defs>
+            <circle class="ring ring-outer" cx="180" cy="180" r="164"/>
+            <circle class="ring ring-mid" cx="180" cy="180" r="140"/>
+            <circle class="ring-progress" id="ring-progress" cx="180" cy="180" r="140" filter="url(#glowFilter)"/>
+            <circle class="ring ring-inner" cx="180" cy="180" r="112"/>
+            <g id="tick-group"></g>
+          </svg>
+          <div class="hud-readout">
+            <span class="hud-value" id="hud-value">0.0</span>
+            <span class="hud-unit" id="hud-unit">Mbps</span>
+            <span class="hud-stage" id="hud-stage">Ready</span>
+          </div>
+        </div>
+      </div>
+
+      <button class="crystal-btn" id="start-btn" type="button">
+        <span class="crystal-face"></span>
+        <span class="crystal-label" id="start-label">Start Test</span>
+      </button>
+
+      <p class="hero-sub" id="hero-sub">One tap. Full spectrum diagnostics: ping, jitter, download, upload.</p>
+    </section>
+
+    <!-- RESULTS -->
+    <section class="results" id="results-section" hidden aria-live="polite">
+      <div class="results-grid">
+        <article class="glass-card metric-card" data-metric="download">
+          <span class="metric-label">Download</span>
+          <span class="metric-value"><span id="res-download">0</span><small>Mbps</small></span>
+          <span class="metric-spark" aria-hidden="true"></span>
+        </article>
+        <article class="glass-card metric-card" data-metric="upload">
+          <span class="metric-label">Upload</span>
+          <span class="metric-value"><span id="res-upload">0</span><small>Mbps</small></span>
+          <span class="metric-spark" aria-hidden="true"></span>
+        </article>
+        <article class="glass-card metric-card" data-metric="ping">
+          <span class="metric-label">Ping</span>
+          <span class="metric-value"><span id="res-ping">0</span><small>ms</small></span>
+          <span class="metric-spark" aria-hidden="true"></span>
+        </article>
+        <article class="glass-card metric-card" data-metric="jitter">
+          <span class="metric-label">Jitter</span>
+          <span class="metric-value"><span id="res-jitter">0</span><small>ms</small></span>
+          <span class="metric-spark" aria-hidden="true"></span>
+        </article>
+        <article class="glass-card metric-card grade-card" data-metric="grade">
+          <span class="metric-label">Network Grade</span>
+          <span class="metric-value grade-value" id="res-grade">—</span>
+        </article>
+      </div>
+
+      <article class="glass-card assistant-card" id="assistant-card">
+        <div class="assistant-avatar" aria-hidden="true"></div>
+        <div class="assistant-body">
+          <span class="assistant-name">Beam Assistant</span>
+          <p class="assistant-text" id="assistant-text">Analyzing your results…</p>
+        </div>
+      </article>
+
+      <button class="ghost-btn" id="retest-btn" type="button">Run again</button>
+    </section>
+
+  </main>
+
+  <!-- HISTORY PANEL -->
+  <aside class="history-panel" id="history-panel" aria-hidden="true" aria-label="Test history">
+    <div class="history-header">
+      <h2>History</h2>
+      <button class="icon-btn" id="history-close" type="button" aria-label="Close history">
+        <svg viewBox="0 0 24 24" width="16" height="16"><path d="M5 5l14 14M19 5L5 19" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="history-search">
+      <input type="search" id="history-search" placeholder="Search by date, grade, speed…" aria-label="Search history" />
+    </div>
+    <ul class="history-list" id="history-list"></ul>
+    <p class="history-empty" id="history-empty" hidden>No tests yet. Your results will glow here.</p>
+    <button class="ghost-btn danger" id="history-clear" type="button">Clear all</button>
+  </aside>
+  <div class="scrim" id="scrim" hidden></div>
+
+</div>
+
+<div class="sr-only" id="live-region" role="status" aria-live="polite"></div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
